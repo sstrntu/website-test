@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jesse's Ramen - Interactive 3D Experience</title>
+    <title>TURFMAPP</title>
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">`
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
@@ -56,9 +56,12 @@
         import { Reflector } from 'three/addons/objects/Reflector.js';
         import { FontLoader } from 'three/addons/loaders/FontLoader.js';
         import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+        import { Line2 } from 'three/addons/lines/Line2.js';
+        import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+        import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 
         let scene, camera, renderer, controls, composer;
-        let textMesh, fontLoader;
+        let textMesh, fontLoader, outlineLineMaterial;
         let stadium, footballField, seating, floodlights, groundReflector;
         let atmosphericParticles = [];
         let isAnimationPlaying = true;
@@ -66,6 +69,9 @@
         let performanceMode = 'high';
         let cameraTransitions = {};
         let isTransitioning = false;
+        let raycaster, pointer;
+        let clickableTargets = [];
+        let activeOrbitTween = null;
         
 
         const container = document.getElementById('container');
@@ -156,13 +162,16 @@
             // Setup UI interactions
             setupEventListeners();
             
+            // Setup click-to-zoom interactions
+            setupClickInteractions();
+            
             // Performance optimization
             optimizeForDevice();
             
             // Start dramatic intro sequence
             setTimeout(() => {
                 startIntroSequence();
-            }, 1000); // Wait 1 second for scene to stabilize
+            }, 200); // Shorter wait for scene to stabilize
             
         }
 
@@ -324,49 +333,88 @@
                 function (font) {
                     console.log('Font loaded successfully');
                     
-                    // Create text geometry - minimal for cleanest outline
-                    const textGeometry = new TextGeometry('TURFMAPP', {
-                        font: font,
-                        size: 40,        // Much larger size
-                        depth: 4,        // More depth for 3D effect
-                        curveSegments: 4,     // Minimal curve segments
-                        bevelEnabled: false,  // No bevel for cleanest lines
-                        bevelThickness: 0,
-                        bevelSize: 0,
-                        bevelOffset: 0,
-                        bevelSegments: 0
-                    });
+                    // Use Three.js example approach - generateShapes for clean outlines
+                    const message = 'TURFMAPP';
+                    const shapes = font.generateShapes(message, 10); // Smaller text size
                     
-                    // Center the text geometry
-                    textGeometry.computeBoundingBox();
-                    const centerOffsetX = -0.5 * (textGeometry.boundingBox.max.x - textGeometry.boundingBox.min.x);
-                    const centerOffsetY = -0.5 * (textGeometry.boundingBox.max.y - textGeometry.boundingBox.min.y);
-                    
-                    // Create clean edges geometry with very high threshold for minimal outline
-                    const edgesGeometry = new THREE.EdgesGeometry(textGeometry, 80); // 80-degree threshold - only sharp edges
-                    const edgesMaterial = new THREE.LineBasicMaterial({
-                        color: 0xffffff,
+                    // Create line material for outline
+                    const lineMaterial = new THREE.LineBasicMaterial({
+                        color: 0x99c2ff,
                         transparent: true,
-                        opacity: 0.9,        // Slightly more opaque
-                        linewidth: 1         // Line width (may not work in all browsers)
+                        opacity: 1.0,
+                        depthTest: false
                     });
                     
-                    // Create text mesh using LineSegments for clean outline
-                    textMesh = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+                    // Create fill material for a layered text effect (like the example)
+                    const fillMaterial = new THREE.MeshBasicMaterial({
+                        color: 0x99c2ff,
+                        transparent: true,
+                        opacity: 0.15,
+                        side: THREE.DoubleSide,
+                        polygonOffset: true,
+                        polygonOffsetFactor: 1,
+                        polygonOffsetUnits: 1
+                    });
+                    
+                    // Create geometry and center it
+                    const shapeGeometry = new THREE.ShapeGeometry(shapes);
+                    shapeGeometry.computeBoundingBox();
+                    const centerOffsetX = -0.5 * (shapeGeometry.boundingBox.max.x - shapeGeometry.boundingBox.min.x);
+                    const centerOffsetY = -0.5 * (shapeGeometry.boundingBox.max.y - shapeGeometry.boundingBox.min.y);
+                    
+                    // Handle holes in letters (like 'A', 'P', 'R')
+                    const holeShapes = [];
+                    for (let i = 0; i < shapes.length; i++) {
+                        const shape = shapes[i];
+                        if (shape.holes && shape.holes.length > 0) {
+                            for (let j = 0; j < shape.holes.length; j++) {
+                                const hole = shape.holes[j];
+                                holeShapes.push(hole);
+                            }
+                        }
+                    }
+                    shapes.push(...holeShapes);
+                    
+                    // Create text object container
+                    textMesh = new THREE.Object3D();
+                    
+                    // Add a semi-transparent filled mesh for the "3D" layered look
+                    const filledGeometry = shapeGeometry.clone();
+                    filledGeometry.translate(centerOffsetX, centerOffsetY, 0);
+                    const filledMesh = new THREE.Mesh(filledGeometry, fillMaterial);
+                    filledMesh.position.z = -25; // push fill further behind the outline for stronger depth
+                    filledMesh.renderOrder = 1; // render first
+                    textMesh.add(filledMesh);
+                    
+                    for (let i = 0; i < shapes.length; i++) {
+                        const shape = shapes[i];
+                        const points = shape.getPoints();
+                        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                        // Center geometry so the text is centered around its origin
+                        geometry.translate(centerOffsetX, centerOffsetY, 0);
+                        
+                        const lineMesh = new THREE.Line(geometry, lineMaterial);
+                        lineMesh.renderOrder = 2; // ensure outline draws on top
+                        textMesh.add(lineMesh);
+                    }
                     
                     // Position text centered in camera view
                     // Calculate position in front of camera at specified distance
                     const cameraDirection = new THREE.Vector3();
                     camera.getWorldDirection(cameraDirection);
                     
-                    // Place text at distance from camera along its view direction
-                    const textDistance = 80; // Farther distance for large text to fill screen properly
-                    textMesh.position.copy(camera.position);
-                    textMesh.position.addScaledVector(cameraDirection, textDistance);
+                    // Place text at a comfortable distance so the whole word is visible
+                    const textDistance = 90; // Move closer to the camera
+                    const textPosition = camera.position.clone();
+                    textPosition.addScaledVector(cameraDirection, textDistance);
+                    // Lift slightly in screen space so it's not cropped at the bottom
+                    const cameraUpWorld = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+                    textPosition.addScaledVector(cameraUpWorld, 5);
                     
-                    // Apply centering offsets
-                    textMesh.position.x += centerOffsetX;
-                    textMesh.position.y += centerOffsetY;
+                    // Position the text object at the calculated position
+                    textMesh.position.copy(textPosition);
+                    
+                    // Geometry already centered; no world-space offset needed
                     
                     // Make text face the camera for proper viewing
                     textMesh.lookAt(camera.position);
@@ -408,6 +456,7 @@
             footballField.position.y = 0;
             footballField.receiveShadow = true;
             scene.add(footballField);
+            clickableTargets.push(footballField);
 
             // Field markings
             const lineGeometry = new THREE.PlaneGeometry(105, 2);
@@ -517,6 +566,7 @@
             
             scene.add(seatingGroup);
             seating = seatingGroup;
+            clickableTargets.push(seatingGroup);
         }
 
         function createFloodlightTowers() {
@@ -689,13 +739,13 @@
             controls.enableZoom = false;
             controls.enablePan = false;
             
-            // Phase 1: Hold on text for 1 second
+            // Phase 1: Brief hold on text
             setTimeout(() => {
                 // Phase 2: Fade out text while zooming past it
                 if (textMesh) {
                     gsap.to(textMesh.material, {
                         opacity: 0,
-                        duration: 1.0,
+                        duration: 0.6,
                         ease: "power2.out",
                         onComplete: () => {
                             scene.remove(textMesh);
@@ -708,7 +758,7 @@
                         x: 1.2,
                         y: 1.2,
                         z: 1.2,
-                        duration: 1.0,
+                        duration: 0.6,
                         ease: "power2.out"
                     });
                 }
@@ -718,7 +768,7 @@
                     x: 19.4319229067779,
                     y: 9.883097359294862,
                     z: 21.532109433098107,
-                    duration: 2.5,  // Slightly longer to accommodate text fade
+                    duration: 1.8,  // Faster zoom
                     ease: "power3.out",  // More dramatic easing
                     onComplete: () => {
                         // Re-enable user controls after intro
@@ -735,18 +785,18 @@
                     x: 0,
                     y: 0,
                     z: 0,
-                    duration: 2.5,
+                    duration: 1.8,
                     ease: "power3.out"
                 });
                 
-            }, 1000); // Hold on text for 1 second before starting zoom
+            }, 250); // Short hold before starting zoom
         }
 
         function createAtmosphericParticles() {
             console.log('Creating atmospheric particle systems...');
             
             // Dust motes in light beams (Jesse's technique)
-            const dustCount = isLowEnd ? 200 : 500;
+            const dustCount = isLowEnd ? 80 : 200; // fewer dust squares
             const dustGeometry = new THREE.BufferGeometry();
             const dustPositions = new Float32Array(dustCount * 3);
             const dustVelocities = new Float32Array(dustCount * 3);
@@ -780,34 +830,7 @@
                 geometry: dustGeometry
             });
             
-            // Stadium atmosphere/mist
-            const mistCount = isLowEnd ? 100 : 200;
-            const mistGeometry = new THREE.BufferGeometry();
-            const mistPositions = new Float32Array(mistCount * 3);
-            
-            for (let i = 0; i < mistCount; i++) {
-                mistPositions[i * 3] = (Math.random() - 0.5) * 400;      // x
-                mistPositions[i * 3 + 1] = Math.random() * 50 + 5;       // y
-                mistPositions[i * 3 + 2] = (Math.random() - 0.5) * 400;  // z
-            }
-            
-            mistGeometry.setAttribute('position', new THREE.BufferAttribute(mistPositions, 3));
-            
-            const mistMaterial = new THREE.PointsMaterial({
-                color: 0x8899ff,
-                size: 8.0,
-                transparent: true,
-                opacity: 0.1,
-                blending: THREE.AdditiveBlending
-            });
-            
-            const mistParticles = new THREE.Points(mistGeometry, mistMaterial);
-            scene.add(mistParticles);
-            atmosphericParticles.push({
-                particles: mistParticles,
-                type: 'mist',
-                geometry: mistGeometry
-            });
+            // Stadium atmosphere/mist disabled (blue squares removed)
             
             console.log('Atmospheric particles created:', atmosphericParticles.length, 'systems');
         }
@@ -893,6 +916,91 @@
             });
             
             console.log('Event listeners setup - Press 1-5 for camera views, T for auto-tour');
+        }
+
+        function setupClickInteractions() {
+            raycaster = new THREE.Raycaster();
+            pointer = new THREE.Vector2();
+            renderer.domElement.addEventListener('pointermove', onPointerMove);
+            renderer.domElement.addEventListener('click', onPointerClick);
+        }
+        
+        function onPointerMove(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            raycaster.setFromCamera(pointer, camera);
+            const targetHits = raycaster.intersectObjects(clickableTargets, true);
+            document.body.style.cursor = targetHits.length ? 'pointer' : 'crosshair';
+        }
+        
+        function onPointerClick(event) {
+            if (isTransitioning) return;
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            raycaster.setFromCamera(pointer, camera);
+            // Click-to-zoom anywhere on field/stadium
+            const targetHits = raycaster.intersectObjects(clickableTargets, true);
+            if (targetHits.length) {
+                const hit = targetHits[0];
+                flyToPointWithOrbit(hit.point);
+            }
+        }
+
+        function flyToPointWithOrbit(point) {
+            // Compute a camera position offset from the clicked point
+            const toCamera = camera.position.clone().sub(controls.target).normalize();
+            const offsetDistance = 12; // how close to get
+            const targetPosition = point.clone().addScaledVector(toCamera, offsetDistance).add(new THREE.Vector3(0, 4, 0));
+            
+            isTransitioning = true;
+            controls.enableRotate = false;
+            controls.enableZoom = false;
+            controls.enablePan = false;
+            
+            gsap.to(camera.position, {
+                x: targetPosition.x,
+                y: targetPosition.y,
+                z: targetPosition.z,
+                duration: 1.2,
+                ease: "power2.inOut"
+            });
+            
+            gsap.to(controls.target, {
+                x: point.x,
+                y: point.y,
+                z: point.z,
+                duration: 1.2,
+                ease: "power2.inOut",
+                onComplete: () => {
+                    // Orbit around the point for a moment
+                    const start = { angle: 0 };
+                    const radius = 10;
+                    const up = new THREE.Vector3(0, 1, 0);
+                    const right = new THREE.Vector3().subVectors(camera.position, point).cross(up).normalize();
+                    const aroundUp = up.clone();
+                    
+                    activeOrbitTween = gsap.to(start, {
+                        angle: Math.PI * 2 * 0.25, // quarter turn
+                        duration: 2.0,
+                        ease: "sine.inOut",
+                        onUpdate: () => {
+                            const dir = new THREE.Vector3().copy(aroundUp).multiplyScalar(Math.cos(start.angle)).add(right.clone().multiplyScalar(Math.sin(start.angle)));
+                            camera.position.copy(point).addScaledVector(dir.normalize(), radius).add(new THREE.Vector3(0, 4, 0));
+                            camera.lookAt(point);
+                        },
+                        onComplete: () => {
+                            controls.enableRotate = true;
+                            controls.enableZoom = true;
+                            controls.enablePan = true;
+                            isTransitioning = false;
+                        }
+                    });
+                }
+            });
         }
 
         function animate() {
