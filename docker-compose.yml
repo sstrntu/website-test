@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: stadium-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+    networks:
+      - stadium-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: stadium-frontend
+    ports:
+      - "3007:80"
+    depends_on:
+      - backend
+    volumes:
+      # For development - mount source files
+      - ./frontend:/usr/share/nginx/html
+    restart: unless-stopped
+    networks:
+      - stadium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Future: Add database service when needed
+  # database:
+  #   image: postgres:15-alpine
+  #   container_name: stadium-db
+  #   environment:
+  #     POSTGRES_DB: stadium
+  #     POSTGRES_USER: stadium_user
+  #     POSTGRES_PASSWORD: stadium_pass
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - stadium-network
+
+networks:
+  stadium-network:
+    driver: bridge
+
+# volumes:
+#   postgres_data:

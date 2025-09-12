@@ -1,0 +1,41 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies
+node_modules
+__pycache__
+*.pyc
+.pytest_cache
+
+# Development files
+.env.local
+.env.development
+*.log
+.DS_Store
+
+# Build artifacts
+dist
+build
+*.egg-info
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Large media files that should not be in containers
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.mp4
+*.mov
+*.pdf
+
+# Documentation
+README.md
+docs/
+PLANNING.md
+TASK.md
