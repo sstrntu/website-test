@@ -62,7 +62,7 @@
 
         let scene, camera, renderer, controls, composer;
         let textMesh, fontLoader, outlineLineMaterial;
-        let stadium, footballField, seating, floodlights, groundReflector;
+        let stadium, footballField, seating, floodlights, groundReflector, groundMist;
         let atmosphericParticles = [];
         let isAnimationPlaying = true;
         let effectsEnabled = true;
@@ -72,6 +72,19 @@
         let raycaster, pointer;
         let clickableTargets = [];
         let activeOrbitTween = null;
+        
+        // Multi-scale system variables  
+        let sphere, sphereRadius = 1500; // Much bigger sphere to be clearly visible at distance
+        let currentZoomScale = 'sphere'; // 'sphere', 'stadium', 'detail'
+        let scaleThresholds = {
+            sphere: { min: 2500, max: Infinity },
+            stadium: { min: 500, max: 2500 },
+            detail: { min: 1, max: 500 }
+        };
+        let sphereVisible = true;
+        let stadiumTextVisible = false;
+        let stadiumDetailVisible = false;
+        let hasSeenIntroSequence = false; // Track if intro has completed
         
 
         const container = document.getElementById('container');
@@ -87,51 +100,52 @@
             // Scene setup for stadium atmosphere
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x001122);
-            scene.fog = new THREE.Fog(0x001122, 50, 500);
+            scene.fog = new THREE.Fog(0x001122, 50, 8000); // Extended fog range for sphere visibility
 
-            // Camera setup - start from very far for dramatic intro
-            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
-            camera.position.set(133.79450201043988, 47.854569820237366, 140.7443475920018); // Start from far zoom-out position
+            // Camera setup - start far enough back to see the complete sphere
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 15000);
+            camera.position.set(0, 0, 4000); // Start far enough to see complete sphere
 
-            // Renderer setup
+            // Renderer setup - optimized for performance
             renderer = new THREE.WebGLRenderer({ 
-                antialias: !isLowEnd,
-                powerPreference: "high-performance"
+                antialias: false, // Disable antialiasing to reduce load
+                powerPreference: "default" // Use default instead of high-performance
             });
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Lower pixel ratio
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.enabled = false; // Disable shadows to reduce load
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             renderer.outputColorSpace = THREE.SRGBColorSpace;
             renderer.toneMappingExposure = 1.2;
             container.appendChild(renderer.domElement);
 
-            // Enhanced post-processing setup
-            if (!isLowEnd) {
-                composer = new EffectComposer(renderer);
-                const renderPass = new RenderPass(scene, camera);
-                composer.addPass(renderPass);
+            // Post-processing disabled to reduce heat/load
+            // if (!isLowEnd) {
+            //     composer = new EffectComposer(renderer);
+            //     const renderPass = new RenderPass(scene, camera);
+            //     composer.addPass(renderPass);
 
-                // Stadium-optimized bloom for dramatic floodlight effects
-                const bloomPass = new UnrealBloomPass(
-                    new THREE.Vector2(window.innerWidth, window.innerHeight),
-                    2.0,    // Higher bloom strength for stadium lights
-                    0.3,    // Bloom radius
-                    0.95    // Bloom threshold - only bright lights bloom
-                );
-                bloomPass.threshold = 0.95; // Only very bright elements bloom
-                bloomPass.strength = 2.0;   // Dramatic stadium lighting
-                bloomPass.radius = 0.3;     // Focused light halos
-                composer.addPass(bloomPass);
-                console.log('Enhanced bloom post-processing enabled');
-            }
+            //     // Stadium-optimized bloom for dramatic floodlight effects
+            //     const bloomPass = new UnrealBloomPass(
+            //         new THREE.Vector2(window.innerWidth, window.innerHeight),
+            //         2.0,    // Higher bloom strength for stadium lights
+            //         0.3,    // Bloom radius
+            //         0.95    // Bloom threshold - only bright lights bloom
+            //     );
+            //     bloomPass.threshold = 0.95; // Only very bright elements bloom
+            //     bloomPass.strength = 2.0;   // Dramatic stadium lighting
+            //     bloomPass.radius = 0.3;     // Focused light halos
+            //     composer.addPass(bloomPass);
+            //     console.log('Enhanced bloom post-processing enabled');
+            // }
+            console.log('Post-processing disabled for performance');
 
-            // Enhanced controls with extended zoom range
+            // Enhanced controls with extended zoom range for sphere-to-detail
             controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.08;
             controls.minDistance = 1;      // Allow much closer inspection beyond default position
-            controls.maxDistance = 200;    // Reasonable maximum distance from default position
+            controls.maxDistance = 6000;   // Extended for complete sphere view
             controls.maxPolarAngle = Math.PI * 0.48;
             controls.autoRotate = false;   // Disabled for intro sequence
             controls.autoRotateSpeed = 0.3;
@@ -140,21 +154,24 @@
             controls.zoomSpeed = 1.2;
             controls.panSpeed = 0.8;
 
+            // Create sphere first
+            createSphere();
+            
             // Lighting setup for stadium
             setupLighting();
             
             // Create football stadium
             createStadium();
             
-            // Add reflective ground plane
+            // Add reflective ground plane (will be hidden at sphere scale)
             if (!isLowEnd) {
                 createReflectiveGround();
             }
             
-            // Add atmospheric particles
-            if (!isLowEnd) {
-                createAtmosphericParticles();
-            }
+            // Atmospheric particles disabled for cleaner look
+            // if (!isLowEnd) {
+            //     createAtmosphericParticles();
+            // }
             
             // Setup camera transitions
             setupCameraTransitions();
@@ -168,11 +185,74 @@
             // Performance optimization
             optimizeForDevice();
             
-            // Start dramatic intro sequence
-            setTimeout(() => {
-                startIntroSequence();
-            }, 200); // Shorter wait for scene to stabilize
+            // Start zoom sequence immediately
+            startIntroSequence();
             
+        }
+
+        function createSphere() {
+            console.log('Creating clean wireframe sphere...');
+            
+            // Create sphere container
+            sphere = new THREE.Group();
+            
+            // Create horizontal circles (latitude lines)
+            const latitudes = 16;
+            for (let i = 1; i < latitudes; i++) {
+                const phi = (i / latitudes) * Math.PI;
+                const y = sphereRadius * Math.cos(phi);
+                const radius = sphereRadius * Math.sin(phi);
+                
+                const circleGeometry = new THREE.RingGeometry(radius, radius, 32);
+                const circleMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+                
+                // Convert ring to line
+                const points = [];
+                for (let j = 0; j <= 32; j++) {
+                    const theta = (j / 32) * Math.PI * 2;
+                    points.push(new THREE.Vector3(
+                        radius * Math.cos(theta),
+                        y,
+                        radius * Math.sin(theta)
+                    ));
+                }
+                
+                const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(lineGeometry, circleMaterial);
+                sphere.add(line);
+            }
+            
+            // Create vertical circles (longitude lines)
+            const longitudes = 16;
+            for (let i = 0; i < longitudes; i++) {
+                const theta = (i / longitudes) * Math.PI * 2;
+                
+                const points = [];
+                for (let j = 0; j <= 32; j++) {
+                    const phi = (j / 32) * Math.PI;
+                    points.push(new THREE.Vector3(
+                        sphereRadius * Math.sin(phi) * Math.cos(theta),
+                        sphereRadius * Math.cos(phi),
+                        sphereRadius * Math.sin(phi) * Math.sin(theta)
+                    ));
+                }
+                
+                const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                sphere.add(line);
+            }
+            
+            // Position sphere at origin
+            sphere.position.set(0, 0, 0);
+            
+            scene.add(sphere);
+            clickableTargets.push(sphere);
+            
+            // Make sure camera is looking at the sphere
+            controls.target.set(0, 0, 0);
+            
+            console.log('Clean wireframe sphere created with radius:', sphereRadius);
         }
 
         function setupLighting() {
@@ -206,14 +286,18 @@
                 floodlight.position.set(pos.x, pos.y, pos.z);
                 floodlight.target.position.set(0, 0, 0);
                 
-                if (!isLowEnd) {
-                    floodlight.castShadow = true;
-                    floodlight.shadow.mapSize.width = 2048;
-                    floodlight.shadow.mapSize.height = 2048;
-                    floodlight.shadow.camera.near = 10;
-                    floodlight.shadow.camera.far = 500;
-                    floodlight.shadow.camera.fov = 45;
-                }
+                // Start with reduced intensity (will increase at detail scale)
+                floodlight.intensity = 2.0;
+                
+                // Shadows disabled for performance
+                // if (!isLowEnd) {
+                //     floodlight.castShadow = true;
+                //     floodlight.shadow.mapSize.width = 2048;
+                //     floodlight.shadow.mapSize.height = 2048;
+                //     floodlight.shadow.camera.near = 10;
+                //     floodlight.shadow.camera.far = 500;
+                //     floodlight.shadow.camera.fov = 45;
+                // }
 
                 scene.add(floodlight);
                 scene.add(floodlight.target);
@@ -282,12 +366,30 @@
                         console.log('Applied scale:', scale);
                     }
                     
-                    // Enable shadows
+                    // Start with stadium completely invisible (will appear when zooming in)
+                    stadium.visible = false;
+                    
+                    // Hide all stadium children materials immediately (shadows disabled for performance)
                     stadium.traverse((child) => {
                         if (child.isMesh) {
-                            child.castShadow = true;
-                            child.receiveShadow = true;
-                            console.log('Mesh found:', child.name, child.material);
+                            // child.castShadow = true;   // Disabled for performance
+                            // child.receiveShadow = true; // Disabled for performance
+                            child.visible = false; // Hide mesh completely
+                            console.log('Mesh found and hidden:', child.name, child.material);
+                            
+                            // Also hide materials
+                            if (child.material) {
+                                // Handle both single materials and arrays
+                                if (Array.isArray(child.material)) {
+                                    child.material.forEach(mat => {
+                                        mat.transparent = true;
+                                        mat.opacity = 0.0;
+                                    });
+                                } else {
+                                    child.material.transparent = true;
+                                    child.material.opacity = 0.0;
+                                }
+                            }
                         }
                     });
                     
@@ -315,8 +417,8 @@
                 },
                 function (error) {
                     console.error('Error loading stadium model:', error);
-                    console.log('Falling back to procedural stadium generation');
-                    createProceduralStadium();
+                    console.log('No fallback stadium - keeping clean sphere view');
+                    // createProceduralStadium(); // Disabled to keep sphere clean
                 }
             );
         }
@@ -344,6 +446,8 @@
                         opacity: 1.0,
                         depthTest: false
                     });
+                    // Store original opacity
+                    lineMaterial.userData.originalOpacity = 1.0;
                     
                     // Create fill material for a layered text effect (like the example)
                     const fillMaterial = new THREE.MeshBasicMaterial({
@@ -355,6 +459,8 @@
                         polygonOffsetFactor: 1,
                         polygonOffsetUnits: 1
                     });
+                    // Store original opacity
+                    fillMaterial.userData.originalOpacity = 0.15;
                     
                     // Create geometry and center it
                     const shapeGeometry = new THREE.ShapeGeometry(shapes);
@@ -399,25 +505,19 @@
                     }
                     
                     // Position text centered in camera view
-                    // Calculate position in front of camera at specified distance
-                    const cameraDirection = new THREE.Vector3();
-                    camera.getWorldDirection(cameraDirection);
-                    
-                    // Place text at a comfortable distance so the whole word is visible
-                    const textDistance = 90; // Move closer to the camera
-                    const textPosition = camera.position.clone();
-                    textPosition.addScaledVector(cameraDirection, textDistance);
-                    // Lift slightly in screen space so it's not cropped at the bottom
-                    const cameraUpWorld = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-                    textPosition.addScaledVector(cameraUpWorld, 5);
-                    
-                    // Position the text object at the calculated position
-                    textMesh.position.copy(textPosition);
+                    // Position text at stadium scale distance from center
+                    // This ensures it appears when zooming from globe to stadium
+                    textMesh.position.set(0, 20, 0); // Above the stadium center
                     
                     // Geometry already centered; no world-space offset needed
                     
-                    // Make text face the camera for proper viewing
-                    textMesh.lookAt(camera.position);
+                    // Start with text completely invisible (will appear when zooming in)
+                    textMesh.children.forEach(child => {
+                        if (child.material) {
+                            child.material.opacity = 0.0;
+                        }
+                    });
+                    textMesh.visible = false; // Completely hide initially
                     
                     scene.add(textMesh);
                     console.log('3D text added to scene at position:', textMesh.position);
@@ -613,6 +713,10 @@
             
             groundReflector.position.y = -5; // Below stadium
             groundReflector.rotateX(-Math.PI / 2);
+            
+            // Start with reflective ground hidden (will appear when zooming in)
+            groundReflector.visible = false;
+            
             scene.add(groundReflector);
             
             // Add subtle fog/mist above reflective surface
@@ -623,10 +727,14 @@
                 opacity: 0.1,
                 side: THREE.DoubleSide
             });
-            const mist = new THREE.Mesh(mistGeometry, mistMaterial);
-            mist.position.y = -4.5;
-            mist.rotateX(-Math.PI / 2);
-            scene.add(mist);
+            groundMist = new THREE.Mesh(mistGeometry, mistMaterial);
+            groundMist.position.y = -4.5;
+            groundMist.rotateX(-Math.PI / 2);
+            
+            // Start with mist hidden (will appear when zooming in)
+            groundMist.visible = false;
+            
+            scene.add(groundMist);
             
             console.log('Reflective ground plane created with wet asphalt effect');
         }
@@ -732,64 +840,39 @@
         }
 
         function startIntroSequence() {
-            console.log('Starting zoom sequence: text -> stadium flythrough...');
+            console.log('Starting sphere-to-stadium zoom sequence...');
             
             // Disable user controls during intro
             controls.enableRotate = false;
             controls.enableZoom = false;
             controls.enablePan = false;
             
-            // Phase 1: Brief hold on text
-            setTimeout(() => {
-                // Phase 2: Fade out text while zooming past it
-                if (textMesh) {
-                    gsap.to(textMesh.material, {
-                        opacity: 0,
-                        duration: 0.6,
-                        ease: "power2.out",
-                        onComplete: () => {
-                            scene.remove(textMesh);
-                            console.log('3D text faded out and removed');
-                        }
-                    });
+            console.log('Starting instant zoom to stadium...');
+            
+            // Immediate continuous zoom from sphere directly to detail view
+            gsap.to(camera.position, {
+                x: 19.4319229067779,
+                y: 9.883097359294862,
+                z: 21.532109433098107,
+                duration: 5.0, // Smooth zoom duration
+                ease: "power1.inOut", // Smooth continuous zoom
+                onComplete: () => {
+                    // Re-enable user controls after intro
+                    controls.enableRotate = true;
+                    controls.enableZoom = true;
+                    controls.enablePan = true;
+                    hasSeenIntroSequence = true; // Mark intro as completed
                     
-                    // Also scale text slightly for extra effect
-                    gsap.to(textMesh.scale, {
-                        x: 1.2,
-                        y: 1.2,
-                        z: 1.2,
-                        duration: 0.6,
-                        ease: "power2.out"
-                    });
-                }
-                
-                // Phase 3: Fast dramatic zoom from far position to default position
-                gsap.to(camera.position, {
-                    x: 19.4319229067779,
-                    y: 9.883097359294862,
-                    z: 21.532109433098107,
-                    duration: 1.8,  // Faster zoom
-                    ease: "power3.out",  // More dramatic easing
-                    onComplete: () => {
-                        // Re-enable user controls after intro
-                        controls.enableRotate = true;
-                        controls.enableZoom = true;
-                        controls.enablePan = true;
-                        console.log('Zoom sequence complete - user controls enabled');
-                        console.log('Default position reached - scroll to zoom closer for inspection');
+                    // Permanently remove TURFMAPP text after intro
+                    if (textMesh) {
+                        scene.remove(textMesh);
+                        textMesh = null;
+                        console.log('TURFMAPP text permanently removed after intro');
                     }
-                });
-                
-                // Update controls target to focus on stadium center
-                gsap.to(controls.target, {
-                    x: 0,
-                    y: 0,
-                    z: 0,
-                    duration: 1.8,
-                    ease: "power3.out"
-                });
-                
-            }, 250); // Short hold before starting zoom
+                    
+                    console.log('Zoom sequence complete - user controls enabled');
+                }
+            });
         }
 
         function createAtmosphericParticles() {
@@ -818,7 +901,7 @@
                 color: 0xffffff,
                 size: 2.0,
                 transparent: true,
-                opacity: 0.3,
+                opacity: 0.05, // Start with low opacity (will increase at detail scale)
                 blending: THREE.AdditiveBlending
             });
             
@@ -912,10 +995,40 @@
                     case 'T':
                         startAutoTour();
                         break;
+                    case 'g':
+                    case 'G':
+                        // Jump to sphere scale
+                        gsap.to(camera.position, {
+                            x: 0, y: 0, z: 4000,
+                            duration: 1.5,
+                            ease: "power2.inOut"
+                        });
+                        break;
+                    case 's':
+                    case 'S':
+                        // Jump to stadium scale
+                        gsap.to(camera.position, {
+                            x: 0, y: 0, z: 1200,
+                            duration: 1.5,
+                            ease: "power2.inOut"
+                        });
+                        break;
+                    case 'd':
+                    case 'D':
+                        // Jump to detail scale
+                        gsap.to(camera.position, {
+                            x: 19.43, y: 9.88, z: 21.53,
+                            duration: 1.5,
+                            ease: "power2.inOut"
+                        });
+                        break;
                 }
             });
             
-            console.log('Event listeners setup - Press 1-5 for camera views, T for auto-tour');
+            console.log('Event listeners setup:');
+            console.log('- Press 1-5 for camera views, T for auto-tour');
+            console.log('- Press G for sphere view, S for stadium view, D for detail view');
+            console.log('- Use scroll wheel to zoom smoothly between all scales');
         }
 
         function setupClickInteractions() {
@@ -926,28 +1039,14 @@
         }
         
         function onPointerMove(event) {
-            const rect = renderer.domElement.getBoundingClientRect();
-            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-            
-            raycaster.setFromCamera(pointer, camera);
-            const targetHits = raycaster.intersectObjects(clickableTargets, true);
-            document.body.style.cursor = targetHits.length ? 'pointer' : 'crosshair';
+            // Keep default cursor since clicking is disabled
+            document.body.style.cursor = 'default';
         }
         
         function onPointerClick(event) {
-            if (isTransitioning) return;
-            const rect = renderer.domElement.getBoundingClientRect();
-            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-            
-            raycaster.setFromCamera(pointer, camera);
-            // Click-to-zoom anywhere on field/stadium
-            const targetHits = raycaster.intersectObjects(clickableTargets, true);
-            if (targetHits.length) {
-                const hit = targetHits[0];
-                flyToPointWithOrbit(hit.point);
-            }
+            // DISABLED click-to-zoom to prevent weird jumping behavior
+            // User should only use scroll wheel and keyboard controls
+            return;
         }
 
         function flyToPointWithOrbit(point) {
@@ -1003,38 +1102,184 @@
             });
         }
 
-        function animate() {
-            requestAnimationFrame(animate);
-
-            // Debug: Log render info occasionally
-            if (Math.random() < 0.001) {
-                console.log('Rendering... Camera pos:', camera.position);
-                console.log('Scene children:', scene.children.length);
+        function updateScaleBasedVisibility() {
+            // Calculate distance from camera to center (0,0,0)
+            const distance = camera.position.distanceTo(controls.target);
+            
+            let newScale = currentZoomScale;
+            if (distance >= scaleThresholds.sphere.min) {
+                newScale = 'sphere';
+            } else if (distance >= scaleThresholds.stadium.min) {
+                newScale = 'stadium';
+            } else {
+                newScale = 'detail';
             }
-
-            // Animations
-            if (isAnimationPlaying) {
-                // Dynamic floodlight intensity for dramatic effect
+            
+            // If scale changed, update visibility
+            if (newScale !== currentZoomScale) {
+                // Removed debug console.log for cleaner experience
+                currentZoomScale = newScale;
+                
+                // Update element visibility based on current scale
+                updateElementVisibility();
+            }
+        }
+        
+        function updateElementVisibility() {
+            // Sphere visibility - since it's now a Group, handle differently
+            const shouldShowSphere = currentZoomScale === 'sphere';
+            if (shouldShowSphere !== sphereVisible) {
+                sphereVisible = shouldShowSphere;
+                if (sphere) {
+                    // Sphere is now a Group, so animate visibility directly
+                    gsap.to(sphere, {
+                        opacity: shouldShowSphere ? 1.0 : 0.0,
+                        duration: 0.8,
+                        ease: "power2.inOut",
+                        onUpdate: function() {
+                            // Update all line materials in the sphere group
+                            sphere.children.forEach(line => {
+                                if (line.material) {
+                                    line.material.opacity = this.targets()[0].opacity;
+                                }
+                            });
+                        }
+                    });
+                    gsap.to(sphere.scale, {
+                        x: shouldShowSphere ? 1.0 : 0.8,
+                        y: shouldShowSphere ? 1.0 : 0.8,
+                        z: shouldShowSphere ? 1.0 : 0.8,
+                        duration: 0.8,
+                        ease: "power2.inOut"
+                    });
+                }
+            }
+            
+            // Stadium text visibility - only show during first zoom sequence, then permanently hidden
+            const shouldShowStadiumText = !hasSeenIntroSequence && currentZoomScale !== 'sphere';
+            if (shouldShowStadiumText !== stadiumTextVisible) {
+                stadiumTextVisible = shouldShowStadiumText;
+                if (textMesh) {
+                    textMesh.visible = shouldShowStadiumText;
+                    if (shouldShowStadiumText) {
+                        // Fade in text (only during first sequence)
+                        textMesh.children.forEach(child => {
+                            if (child.material) {
+                                gsap.to(child.material, {
+                                    opacity: child.material.userData.originalOpacity || 1.0,
+                                    duration: 0.8,
+                                    ease: "power2.inOut"
+                                });
+                            }
+                        });
+                    }
+                }
+            }
+            
+            // Stadium visibility - show when not at sphere scale
+            const shouldShowStadium = currentZoomScale !== 'sphere';
+            if (stadium && stadium.visible !== shouldShowStadium) {
+                stadium.visible = shouldShowStadium;
+                
+                // Also show/hide all stadium children
+                stadium.traverse((child) => {
+                    if (child.isMesh) {
+                        child.visible = shouldShowStadium;
+                        if (child.material) {
+                            // Handle both single materials and arrays
+                            const materials = Array.isArray(child.material) ? child.material : [child.material];
+                            
+                            materials.forEach(mat => {
+                                if (shouldShowStadium) {
+                                    // Fade in stadium
+                                    gsap.to(mat, {
+                                        opacity: 1.0,
+                                        duration: 0.8,
+                                        ease: "power2.inOut"
+                                    });
+                                } else {
+                                    // Fade out stadium
+                                    mat.opacity = 0.0;
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+            
+            // Reflective ground visibility - show when not at sphere scale
+            const shouldShowGround = currentZoomScale !== 'sphere';
+            if (groundReflector && groundReflector.visible !== shouldShowGround) {
+                groundReflector.visible = shouldShowGround;
+            }
+            if (groundMist && groundMist.visible !== shouldShowGround) {
+                groundMist.visible = shouldShowGround;
+            }
+            
+            // Stadium detail visibility
+            const shouldShowDetail = currentZoomScale === 'detail';
+            if (shouldShowDetail !== stadiumDetailVisible) {
+                stadiumDetailVisible = shouldShowDetail;
+                // Floodlights visibility
                 if (floodlights) {
-                    const time = Date.now() * 0.001;
-                    floodlights.forEach((light, index) => {
-                        // Enhanced stadium lighting with more dramatic variation
-                        light.intensity = 8.0 + Math.sin(time * 0.5 + index) * 1.5 + Math.random() * 0.2;
+                    floodlights.forEach(light => {
+                        gsap.to(light, {
+                            intensity: shouldShowDetail ? 8.0 : 2.0,
+                            duration: 0.8,
+                            ease: "power2.inOut"
+                        });
                     });
                 }
                 
-                // Animate atmospheric particles
-                animateParticles();
+                // Atmospheric particles
+                if (atmosphericParticles.length) {
+                    atmosphericParticles.forEach(system => {
+                        gsap.to(system.particles.material, {
+                            opacity: shouldShowDetail ? 0.3 : 0.05,
+                            duration: 0.8,
+                            ease: "power2.inOut"
+                        });
+                    });
+                }
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Update scale-based visibility
+            updateScaleBasedVisibility();
+
+            // Debug logging disabled for cleaner console experience
+
+            // Animations
+            if (isAnimationPlaying) {
+                const time = Date.now() * 0.001;
+                
+                // Sphere is now static - no automatic rotation
+                
+                // Dynamic floodlight intensity for dramatic effect (only in detail mode)
+                if (floodlights && currentZoomScale === 'detail') {
+                    floodlights.forEach((light, index) => {
+                        // Enhanced stadium lighting with more dramatic variation
+                        const baseIntensity = stadiumDetailVisible ? 8.0 : 2.0;
+                        light.intensity = baseIntensity + Math.sin(time * 0.5 + index) * 1.5 + Math.random() * 0.2;
+                    });
+                }
+                
+                // Atmospheric particles disabled
+                // animateParticles();
+                
+                // Make text always face camera when visible
+                if (textMesh && currentZoomScale === 'stadium') {
+                    textMesh.lookAt(camera.position);
+                }
             }
 
             controls.update();
 
-            // Render with enhanced post-processing pipeline
-            if (composer && effectsEnabled) {
-                composer.render();
-            } else {
-                renderer.render(scene, camera);
-            }
+            // Render with basic rendering (post-processing disabled for performance)
+            renderer.render(scene, camera);
         }
 
         function onWindowResize() {
