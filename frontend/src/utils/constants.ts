@@ -26,11 +26,12 @@ export const COLORS = {
   AMBIENT_LIGHT: 0x404080,
   FLOODLIGHT: 0xffffff,
   RIM_LIGHT: 0x8899ff,
-  FILL_LIGHT: 0xff8844
+  FILL_LIGHT: 0xff8844,
+  TURFMAPP_TEXT: 0x00ff00 // Neon green for TURFMAPP text
 };
 
 export const ANIMATION_DURATIONS = {
-  INTRO_ZOOM: 5.0,
+  INTRO_ZOOM: 2.0, // Reduced from 5.0 to 2.0 seconds for faster zoom
   CAMERA_TRANSITION: 2.0,
   VISIBILITY_FADE: 0.8
 };

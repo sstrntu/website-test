@@ -6,6 +6,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 
 import { Sphere } from './Sphere';
 import { LightingSystem } from './LightingSystem';
+import { Text3D } from './Text3D';
 import { StadiumLoader } from '../loaders/StadiumLoader';
 import { detectPerformance, getPerformanceSettings } from '../utils/performance';
 import { 
@@ -42,6 +43,7 @@ export class StadiumApp {
   
   private sphere?: Sphere;
   private lightingSystem?: LightingSystem;
+  private text3D?: Text3D;
   private stadiumLoader = new StadiumLoader();
 
   constructor(container: HTMLElement) {
@@ -77,6 +79,15 @@ export class StadiumApp {
     } catch (error) {
       console.error('Failed to load stadium:', error);
       console.log('Continuing without stadium model');
+    }
+
+    // Create 3D text
+    this.text3D = new Text3D(this.sceneElements.scene!);
+    try {
+      await this.text3D.create3DText('TURFMAPP');
+      console.log('Jesse Zhou style 3D text created');
+    } catch (error) {
+      console.error('Failed to create 3D text:', error);
     }
     
     // Setup post-processing if enabled
@@ -214,6 +225,12 @@ export class StadiumApp {
           this.sceneElements.controls!.enablePan = true;
           this.appState.hasSeenIntroSequence = true;
           
+          // Permanently remove TURFMAPP text after intro
+          if (this.text3D) {
+            this.text3D.remove();
+            this.text3D = undefined;
+          }
+          
           console.log('Zoom sequence complete - user controls enabled');
         }
       });
@@ -243,6 +260,11 @@ export class StadiumApp {
       // Dynamic floodlight intensity for dramatic effect (only in detail mode)
       if (this.lightingSystem && this.appState.currentZoomScale === 'detail') {
         this.lightingSystem.animateFloodlights(time);
+      }
+
+      // Make text face camera when visible
+      if (this.text3D && this.appState.stadiumTextVisible) {
+        this.text3D.lookAtCamera(this.sceneElements.camera!);
       }
     }
 
@@ -298,6 +320,13 @@ export class StadiumApp {
         this.sceneElements.stadium, 
         shouldShowStadium
       );
+    }
+    
+    // Text visibility - show when not at sphere scale and intro not seen yet
+    const shouldShowText = !this.appState.hasSeenIntroSequence && this.appState.currentZoomScale !== 'sphere';
+    if (shouldShowText !== this.appState.stadiumTextVisible) {
+      this.appState.stadiumTextVisible = shouldShowText;
+      this.text3D?.updateVisibility(shouldShowText);
     }
     
     // Detail visibility (floodlight intensity)
