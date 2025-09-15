@@ -7,7 +7,7 @@
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">`
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
-        
+
         * {
             margin: 0;
             padding: 0;
@@ -34,8 +34,8 @@
 </head>
 <body>
     <div id="container"></div>
-    
-    
+
+
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script type="importmap">
@@ -74,8 +74,8 @@
         let raycaster, pointer;
         let clickableTargets = [];
         let activeOrbitTween = null;
-        
-        // Multi-scale system variables  
+
+        // Multi-scale system variables
         let sphere, sphereRadius = 1500; // Much bigger sphere to be clearly visible at distance
         let currentZoomScale = 'sphere'; // 'sphere', 'stadium', 'detail'
         let scaleThresholds = {
@@ -88,10 +88,10 @@
         let stadiumDetailVisible = false;
         let hasSeenIntroSequence = false;
         let worldSpaceText; // 2D text positioned next to the stadium
-        
+
 
         const container = document.getElementById('container');
-        
+
 
         // Performance detection
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -111,7 +111,7 @@
             camera.position.set(0, 0, 4000); // Start far enough to see complete sphere
 
             // Renderer setup - optimized for performance
-            renderer = new THREE.WebGLRenderer({ 
+            renderer = new THREE.WebGLRenderer({
                 antialias: false, // Disable antialiasing to reduce load
                 powerPreference: "default" // Use default instead of high-performance
             });
@@ -133,63 +133,63 @@
             controls.maxPolarAngle = Math.PI * 0.48;
             controls.autoRotate = false;   // Disabled for intro sequence
             controls.autoRotateSpeed = 0.3;
-            
+
             // Enhanced zoom sensitivity
             controls.zoomSpeed = 1.2;
             controls.panSpeed = 0.8;
 
             // Create sphere first
             createSphere();
-            
+
             // Lighting setup for stadium
             setupLighting();
-            
+
             // Create football stadium
             createStadium();
-            
+
             // Add reflective ground plane (will be hidden at sphere scale)
             if (!isLowEnd) {
                 createReflectiveGround();
             }
-            
-            
+
+
             // Setup camera transitions
             setupCameraTransitions();
-            
+
             // Setup UI interactions
             setupEventListeners();
-            
+
             // Setup click-to-zoom interactions
             setupClickInteractions();
-            
+
             // Performance optimization
             optimizeForDevice();
-            
+
             // Start zoom sequence immediately
             startIntroSequence();
-            
+
         }
 
         function createSphere() {
             console.log('Creating clean wireframe sphere...');
-            
+
             // Create sphere container
             sphere = new THREE.Group();
-            
+
             // Create horizontal circles (latitude lines)
             const latitudes = 16;
             for (let i = 1; i < latitudes; i++) {
                 const phi = (i / latitudes) * Math.PI;
                 const y = sphereRadius * Math.cos(phi);
                 const radius = sphereRadius * Math.sin(phi);
-                
+
                 const circleGeometry = new THREE.RingGeometry(radius, radius, 32);
-                const circleMaterial = new THREE.LineBasicMaterial({ 
+                const circleMaterial = new THREE.LineBasicMaterial({
                     color: 0xffffff,
                     transparent: true,
                     opacity: 1.0
                 });
-                
+
                 // Convert ring to line
                 const points = [];
                 for (let j = 0; j <= 32; j++) {
@@ -200,17 +200,17 @@
                         radius * Math.sin(theta)
                     ));
                 }
-                
+
                 const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
                 const line = new THREE.Line(lineGeometry, circleMaterial);
                 sphere.add(line);
             }
-            
+
             // Create vertical circles (longitude lines)
             const longitudes = 16;
             for (let i = 0; i < longitudes; i++) {
                 const theta = (i / longitudes) * Math.PI * 2;
-                
+
                 const points = [];
                 for (let j = 0; j <= 32; j++) {
                     const phi = (j / 32) * Math.PI;
@@ -220,9 +220,9 @@
                         sphereRadius * Math.sin(phi) * Math.sin(theta)
                     ));
                 }
-                
+
                 const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-                const lineMaterial = new THREE.LineBasicMaterial({ 
+                const lineMaterial = new THREE.LineBasicMaterial({
                     color: 0xffffff,
                     transparent: true,
                     opacity: 1.0
@@ -230,22 +230,22 @@
                 const line = new THREE.Line(lineGeometry, lineMaterial);
                 sphere.add(line);
             }
-            
+
             // Position sphere at origin
             sphere.position.set(0, 0, 0);
-            
+
             scene.add(sphere);
             clickableTargets.push(sphere);
-            
+
             // Make sure camera is looking at the sphere
             controls.target.set(0, 0, 0);
-            
+
             console.log('Clean wireframe sphere created with radius:', sphereRadius);
         }
 
         function setupLighting() {
             console.log('Setting up cinematic stadium lighting...');
-            
+
             // Reduced ambient for dramatic contrast
             const ambientLight = new THREE.AmbientLight(0x404080, 0.3);
             scene.add(ambientLight);
@@ -270,18 +270,18 @@
                     0.3,                // Soft penumbra
                     1.5                 // Distance decay
                 );
-                
+
                 floodlight.position.set(pos.x, pos.y, pos.z);
                 floodlight.target.position.set(0, 0, 0);
-                
+
                 // Start with reduced intensity (will increase at detail scale)
                 floodlight.intensity = 2.0;
-                
+
 
                 scene.add(floodlight);
                 scene.add(floodlight.target);
                 floodlights.push(floodlight);
-                
+
                 // Add light helper visualization (remove in production)
                 if (!isLowEnd) {
                     const helper = new THREE.SpotLightHelper(floodlight);
@@ -310,7 +310,7 @@
 
         function loadStadiumModel() {
             const loader = new GLTFLoader();
-            
+
             // Setup Draco loader for compressed models
             const dracoLoader = new DRACOLoader();
             dracoLoader.setDecoderPath('https://unpkg.com/three@0.158.0/examples/jsm/libs/draco/');
@@ -323,20 +323,20 @@
                     console.log('Stadium model loaded successfully');
                     console.log('Model bounding box:', gltf.scene);
                     console.log('Model children:', gltf.scene.children);
-                    
+
                     stadium = gltf.scene;
-                    
+
                     // Get model dimensions for proper camera positioning
                     const box = new THREE.Box3().setFromObject(stadium);
                     const center = box.getCenter(new THREE.Vector3());
                     const size = box.getSize(new THREE.Vector3());
-                    
+
                     console.log('Model center:', center);
                     console.log('Model size:', size);
-                    
+
                     // Position model at center
                     stadium.position.sub(center);
-                    
+
                     // Scale if too small/large
                     const maxDim = Math.max(size.x, size.y, size.z);
                     if (maxDim > 0) {
@@ -344,16 +344,16 @@
                         stadium.scale.setScalar(scale);
                         console.log('Applied scale:', scale);
                     }
-                    
+
                     // Start with stadium completely invisible (will appear when zooming in)
                     stadium.visible = false;
-                    
+
                     // Hide all stadium children materials initially
                     stadium.traverse((child) => {
                         if (child.isMesh) {
                             child.visible = false;
                             console.log('Mesh found and hidden:', child.name, child.material);
-                            
+
                             // Also hide materials
                             if (child.material) {
                                 // Handle both single materials and arrays
@@ -369,20 +369,20 @@
                             }
                         }
                     });
-                    
+
                     scene.add(stadium);
                     console.log('Stadium added to scene');
-                    
+
                     // Keep camera at initial far position for intro sequence
-                    // Camera will be moved by startIntroSequence() 
+                    // Camera will be moved by startIntroSequence()
                     console.log('Stadium loaded - camera remains at starting position:', camera.position);
-                    
+
                     // Create 3D text overlay for intro
                     create3DText();
-                    
+
                     // Create Jesse Zhou style world-space text
                     createWorldSpaceText();
-                    
+
                     // If the model has animations, set them up
                     if (gltf.animations && gltf.animations.length) {
                         const mixer = new THREE.AnimationMixer(stadium);
@@ -405,25 +405,25 @@
 
         function create3DText() {
             console.log('Creating 3D text overlay...');
-            
+
             // Check if TextGeometry is available
             if (typeof TextGeometry === 'undefined') {
                 console.error('TextGeometry not available');
                 return;
             }
-            
+
             // Initialize font loader
             fontLoader = new FontLoader();
-            
+
             // Load font and create text (using bold font for better Jesse Zhou style)
             fontLoader.load(
-                'https://unpkg.com/three@0.158.0/examples/fonts/helvetiker_bold.typeface.json',
+                'frontend/assets/helvetiker_bold.typeface.json',
                 function (font) {
                     console.log('Font loaded successfully');
-                    
+
                     // Create Jesse Zhou style 3D text with depth and bevel
                     const message = 'TURFMAPP';
-                    
+
                     // Create 3D text geometry with Jesse Zhou inspired settings
                     const textGeometry = new TextGeometry(message, {
                         font: font,
@@ -436,13 +436,13 @@
                         bevelOffset: 0,
                         bevelSegments: 8
                     });
-                    
+
                     // Center the text
                     textGeometry.computeBoundingBox();
                     const centerOffsetX = -0.5 * (textGeometry.boundingBox.max.x - textGeometry.boundingBox.min.x);
                     const centerOffsetY = -0.5 * (textGeometry.boundingBox.max.y - textGeometry.boundingBox.min.y);
                     textGeometry.translate(centerOffsetX, centerOffsetY, 0);
-                    
+
                     // Create Jesse Zhou style materials
                     const mainMaterial = new THREE.MeshPhongMaterial({
                         color: 0x00ff00, // Neon green
@@ -451,7 +451,7 @@
                         transparent: true,
                         opacity: 1.0
                     });
-                    
+
                     // Outline material for depth
                     const outlineMaterial = new THREE.MeshBasicMaterial({
                         color: new THREE.Color(0x00ff00).multiplyScalar(0.3),
@@ -459,30 +459,30 @@
                         opacity: 0.8,
                         side: THREE.BackSide
                     });
-                    
+
                     // Store original opacities
                     mainMaterial.userData.originalOpacity = 1.0;
                     outlineMaterial.userData.originalOpacity = 0.8;
-                    
+
                     // Create text object container
                     textMesh = new THREE.Group();
-                    
+
                     // Main 3D text mesh
                     const mainTextMesh = new THREE.Mesh(textGeometry, mainMaterial);
                     textMesh.add(mainTextMesh);
-                    
+
                     // Create outline for depth (Jesse Zhou style)
                     const outlineGeometry = textGeometry.clone();
                     const outlineMesh = new THREE.Mesh(outlineGeometry, outlineMaterial);
                     outlineMesh.scale.setScalar(1.05);
                     outlineMesh.position.z = -0.1;
                     textMesh.add(outlineMesh);
-                    
+
                     // Position text prominently above the stadium
                     textMesh.position.set(0, 50, 0); // Higher above the stadium for better visibility
-                    
+
                     // Geometry already centered; no world-space offset needed
-                    
+
                     // Start with text completely invisible (will appear when zooming in)
                     textMesh.children.forEach(child => {
                         if (child.material) {
@@ -491,7 +491,7 @@
                         }
                     });
                     textMesh.visible = false; // Completely hide initially
-                    
+
                     scene.add(textMesh);
                     console.log('3D text added to scene at position:', textMesh.position);
                 },
@@ -507,7 +507,7 @@
 
         function createWorldSpaceText() {
             console.log('Creating Jesse Zhou style 2D text overlay...');
-            
+
             // Create HTML text element positioned in 3D space
             const textDiv = document.createElement('div');
             textDiv.innerHTML = `
@@ -521,27 +521,27 @@
             textDiv.style.zIndex = '100';
             textDiv.style.opacity = '0';
             textDiv.style.transition = 'opacity 0.8s ease';
-            
+
             document.body.appendChild(textDiv);
             worldSpaceText = textDiv; // Store reference
-            
+
             console.log('Jesse Zhou style 2D text created');
         }
 
         // Function to position 2D text next to the 3D stadium
         function updateWorldSpaceTextPosition() {
             if (!worldSpaceText || !camera || !renderer) return;
-            
+
             // 3D position to the right of stadium
             const stadiumPosition = new THREE.Vector3(10, 5, 5);
-            
+
             // Project 3D position to screen coordinates
             const screenPosition = stadiumPosition.clone().project(camera);
-            
+
             // Convert to screen pixels
             const x = (screenPosition.x * 0.5 + 0.5) * window.innerWidth;
             const y = (-screenPosition.y * 0.5 + 0.5) * window.innerHeight;
-            
+
             // Update HTML text position
             worldSpaceText.style.left = `${x}px`;
             worldSpaceText.style.top = `${y}px`;
@@ -550,10 +550,10 @@
         function createProceduralStadium() {
             // Create football field
             createFootballField();
-            
+
             // Create stadium seating
             createSeating();
-            
+
             // Create floodlight towers
             if (!isLowEnd) {
                 createFloodlightTowers();
@@ -563,7 +563,7 @@
         function createFootballField() {
             // Main field geometry
             const fieldGeometry = new THREE.PlaneGeometry(105, 68);
-            const fieldMaterial = new THREE.MeshLambertMaterial({ 
+            const fieldMaterial = new THREE.MeshLambertMaterial({
                 color: 0x2d5a2d
             });
             footballField = new THREE.Mesh(fieldGeometry, fieldMaterial);
@@ -575,7 +575,7 @@
 
             // Field markings
             const lineGeometry = new THREE.PlaneGeometry(105, 2);
-            const lineMaterial = new THREE.MeshBasicMaterial({ 
+            const lineMaterial = new THREE.MeshBasicMaterial({
                 color: 0xffffff,
                 transparent: true,
                 opacity: 0.9
@@ -601,7 +601,7 @@
 
             // Center circle
             const circleGeometry = new THREE.RingGeometry(9.15, 9.65, 32);
-            const circleMaterial = new THREE.MeshBasicMaterial({ 
+            const circleMaterial = new THREE.MeshBasicMaterial({
                 color: 0xffffff,
                 transparent: true,
                 opacity: 0.9,
@@ -647,18 +647,18 @@
 
         function createSeating() {
             const seatingGroup = new THREE.Group();
-            
+
             // Stadium bowl structure
             const stadiumGeometry = new THREE.RingGeometry(60, 120, 32, 1, 0, Math.PI * 2);
-            const stadiumMaterial = new THREE.MeshLambertMaterial({ 
+            const stadiumMaterial = new THREE.MeshLambertMaterial({
                 color: 0x666666,
                 side: THREE.DoubleSide
             });
-            
+
             // Create tiered seating
             for (let tier = 0; tier < 4; tier++) {
                 const tierGeometry = new THREE.RingGeometry(65 + tier * 12, 75 + tier * 12, 32);
-                const tierMaterial = new THREE.MeshLambertMaterial({ 
+                const tierMaterial = new THREE.MeshLambertMaterial({
                     color: tier % 2 === 0 ? 0x4a4a4a : 0x555555
                 });
                 const tierMesh = new THREE.Mesh(tierGeometry, tierMaterial);
@@ -667,10 +667,10 @@
                 tierMesh.receiveShadow = true;
                 seatingGroup.add(tierMesh);
             }
-            
+
             // Stadium outer wall
             const wallGeometry = new THREE.CylinderGeometry(125, 120, 50, 32, 1, true);
-            const wallMaterial = new THREE.MeshLambertMaterial({ 
+            const wallMaterial = new THREE.MeshLambertMaterial({
                 color: 0x333333,
                 side: THREE.DoubleSide
             });
@@ -678,7 +678,7 @@
             wall.position.y = 25;
             wall.receiveShadow = true;
             seatingGroup.add(wall);
-            
+
             scene.add(seatingGroup);
             seating = seatingGroup;
             clickableTargets.push(seatingGroup);
@@ -688,20 +688,20 @@
             // Create floodlight tower structures
             const towerGeometry = new THREE.CylinderGeometry(1, 2, 100);
             const towerMaterial = new THREE.MeshLambertMaterial({ color: 0x888888 });
-            
+
             const positions = [
                 [-90, 50, -50],
                 [90, 50, -50],
                 [-90, 50, 50],
                 [90, 50, 50]
             ];
-            
+
             positions.forEach((pos, index) => {
                 const tower = new THREE.Mesh(towerGeometry, towerMaterial);
                 tower.position.set(pos[0], pos[1], pos[2]);
                 tower.castShadow = true;
                 scene.add(tower);
-                
+
                 // Floodlight housing
                 const housingGeometry = new THREE.BoxGeometry(4, 2, 2);
                 const housingMaterial = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
@@ -713,10 +713,10 @@
 
         function createReflectiveGround() {
             console.log('Creating reflective ground plane...');
-            
+
             // Create large reflective ground plane beneath stadium
             const groundGeometry = new THREE.PlaneGeometry(400, 400);
-            
+
             // Use Reflector for realistic reflections (Jesse's technique)
             groundReflector = new Reflector(groundGeometry, {
                 clipBias: 0.003,
@@ -725,15 +725,15 @@
                 color: 0x333344,  // Subtle blue tint
                 recursion: 1
             });
-            
+
             groundReflector.position.y = -5; // Below stadium
             groundReflector.rotateX(-Math.PI / 2);
-            
+
             // Start with reflective ground hidden (will appear when zooming in)
             groundReflector.visible = false;
-            
+
             scene.add(groundReflector);
-            
+
             // Add subtle fog/mist above reflective surface
             const mistGeometry = new THREE.PlaneGeometry(400, 400);
             const mistMaterial = new THREE.MeshBasicMaterial({
@@ -745,12 +745,12 @@
             groundMist = new THREE.Mesh(mistGeometry, mistMaterial);
             groundMist.position.y = -4.5;
             groundMist.rotateX(-Math.PI / 2);
-            
+
             // Start with mist hidden (will appear when zooming in)
             groundMist.visible = false;
-            
+
             scene.add(groundMist);
-            
+
             console.log('Reflective ground plane created with wet asphalt effect');
         }
 
@@ -788,7 +788,7 @@
                     name: 'Default View'
                 }
             };
-            
+
             console.log('Camera transition system initialized with', Object.keys(cameraTransitions).length, 'viewpoints');
         }
 
@@ -797,17 +797,17 @@
                 console.log('Transition blocked or invalid view:', viewName);
                 return;
             }
-            
+
             const view = cameraTransitions[viewName];
             isTransitioning = true;
-            
+
             console.log('Transitioning to:', view.name);
-            
+
             // Disable controls during transition (Jesse's method)
             controls.enableRotate = false;
             controls.enableZoom = false;
             controls.enablePan = false;
-            
+
             // Smooth camera position transition
             gsap.to(camera.position, {
                 x: view.position.x,
@@ -816,7 +816,7 @@
                 duration: duration,
                 ease: "power2.inOut"
             });
-            
+
             // Smooth target transition
             gsap.to(controls.target, {
                 x: view.target.x,
@@ -838,7 +838,7 @@
         function startAutoTour() {
             const viewNames = Object.keys(cameraTransitions).filter(name => name !== 'default');
             let currentViewIndex = 0;
-            
+
             const tourInterval = setInterval(() => {
                 if (currentViewIndex >= viewNames.length) {
                     clearInterval(tourInterval);
@@ -846,24 +846,24 @@
                     console.log('Auto-tour completed');
                     return;
                 }
-                
+
                 transitionToView(viewNames[currentViewIndex], 2.5);
                 currentViewIndex++;
             }, 6000); // 6 seconds per view
-            
+
             console.log('Auto-tour started');
         }
 
         function startIntroSequence() {
             console.log('Starting sphere-to-stadium zoom sequence...');
-            
+
             // Disable user controls during intro
             controls.enableRotate = false;
             controls.enableZoom = false;
             controls.enablePan = false;
-            
+
             console.log('Starting instant zoom to stadium...');
-            
+
             // Immediate continuous zoom from sphere directly to detail view
             gsap.to(camera.position, {
                 x: 19.4319229067779,
@@ -877,14 +877,14 @@
                     controls.enableZoom = true;
                     controls.enablePan = true;
                     hasSeenIntroSequence = true; // Mark intro as completed
-                    
+
                     // Permanently remove TURFMAPP text after intro
                     if (textMesh) {
                         scene.remove(textMesh);
                         textMesh = null;
                         console.log('TURFMAPP text permanently removed after intro');
                     }
-                    
+
                     console.log('Zoom sequence complete - user controls enabled');
                 }
             });
@@ -892,26 +892,26 @@
 
         function createAtmosphericParticles() {
             console.log('Creating atmospheric particle systems...');
-            
+
             // Dust motes in light beams (Jesse's technique)
             const dustCount = isLowEnd ? 80 : 200; // fewer dust squares
             const dustGeometry = new THREE.BufferGeometry();
             const dustPositions = new Float32Array(dustCount * 3);
             const dustVelocities = new Float32Array(dustCount * 3);
-            
+
             for (let i = 0; i < dustCount; i++) {
                 dustPositions[i * 3] = (Math.random() - 0.5) * 300;      // x
                 dustPositions[i * 3 + 1] = Math.random() * 100 + 20;      // y
                 dustPositions[i * 3 + 2] = (Math.random() - 0.5) * 300;   // z
-                
+
                 dustVelocities[i * 3] = (Math.random() - 0.5) * 0.02;      // vx
                 dustVelocities[i * 3 + 1] = -Math.random() * 0.01 - 0.005; // vy (falling)
                 dustVelocities[i * 3 + 2] = (Math.random() - 0.5) * 0.02;  // vz
             }
-            
+
             dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
             dustGeometry.setAttribute('velocity', new THREE.BufferAttribute(dustVelocities, 3));
-            
+
             const dustMaterial = new THREE.PointsMaterial({
                 color: 0xffffff,
                 size: 2.0,
@@ -919,7 +919,7 @@
                 opacity: 0.05, // Start with low opacity (will increase at detail scale)
                 blending: THREE.AdditiveBlending
             });
-            
+
             const dustParticles = new THREE.Points(dustGeometry, dustMaterial);
             scene.add(dustParticles);
             atmosphericParticles.push({
@@ -927,34 +927,34 @@
                 type: 'dust',
                 geometry: dustGeometry
             });
-            
+
             // Stadium atmosphere/mist disabled (blue squares removed)
-            
+
             console.log('Atmospheric particles created:', atmosphericParticles.length, 'systems');
         }
 
         function animateParticles() {
             if (!atmosphericParticles.length) return;
-            
+
             atmosphericParticles.forEach(system => {
                 const positions = system.geometry.attributes.position.array;
-                
+
                 if (system.type === 'dust') {
                     const velocities = system.geometry.attributes.velocity.array;
-                    
+
                     for (let i = 0; i < positions.length; i += 3) {
                         // Apply velocity
                         positions[i] += velocities[i];
                         positions[i + 1] += velocities[i + 1];
                         positions[i + 2] += velocities[i + 2];
-                        
+
                         // Reset particles that fall too low
                         if (positions[i + 1] < -10) {
                             positions[i] = (Math.random() - 0.5) * 300;
                             positions[i + 1] = 100 + Math.random() * 50;
                             positions[i + 2] = (Math.random() - 0.5) * 300;
                         }
-                        
+
                         // Wrap particles that drift too far
                         if (Math.abs(positions[i]) > 150) positions[i] = -positions[i];
                         if (Math.abs(positions[i + 2]) > 150) positions[i + 2] = -positions[i + 2];
@@ -968,7 +968,7 @@
                         positions[i + 2] += Math.cos(time + i) * 0.02;
                     }
                 }
-                
+
                 system.geometry.attributes.position.needsUpdate = true;
             });
         }
@@ -984,7 +984,7 @@
 
         function setupEventListeners() {
             window.addEventListener('resize', onWindowResize);
-            
+
             // Keyboard controls for camera transitions (testing/demo)
             window.addEventListener('keydown', (event) => {
                 switch(event.key) {
@@ -1039,7 +1039,7 @@
                         break;
                 }
             });
-            
+
             console.log('Event listeners setup:');
             console.log('- Press 1-5 for camera views, T for auto-tour');
             console.log('- Press G for sphere view, S for stadium view, D for detail view');
@@ -1052,12 +1052,12 @@
             renderer.domElement.addEventListener('pointermove', onPointerMove);
             renderer.domElement.addEventListener('click', onPointerClick);
         }
-        
+
         function onPointerMove(event) {
             // Keep default cursor since clicking is disabled
             document.body.style.cursor = 'default';
         }
-        
+
         function onPointerClick(event) {
             // DISABLED click-to-zoom to prevent weird jumping behavior
             // User should only use scroll wheel and keyboard controls
@@ -1069,12 +1069,12 @@
             const toCamera = camera.position.clone().sub(controls.target).normalize();
             const offsetDistance = 12; // how close to get
             const targetPosition = point.clone().addScaledVector(toCamera, offsetDistance).add(new THREE.Vector3(0, 4, 0));
-            
+
             isTransitioning = true;
             controls.enableRotate = false;
             controls.enableZoom = false;
             controls.enablePan = false;
-            
+
             gsap.to(camera.position, {
                 x: targetPosition.x,
                 y: targetPosition.y,
@@ -1082,7 +1082,7 @@
                 duration: 1.2,
                 ease: "power2.inOut"
             });
-            
+
             gsap.to(controls.target, {
                 x: point.x,
                 y: point.y,
@@ -1096,7 +1096,7 @@
                     const up = new THREE.Vector3(0, 1, 0);
                     const right = new THREE.Vector3().subVectors(camera.position, point).cross(up).normalize();
                     const aroundUp = up.clone();
-                    
+
                     activeOrbitTween = gsap.to(start, {
                         angle: Math.PI * 2 * 0.25, // quarter turn
                         duration: 2.0,
@@ -1120,7 +1120,7 @@
         function updateScaleBasedVisibility() {
             // Calculate distance from camera to center (0,0,0)
             const distance = camera.position.distanceTo(controls.target);
-            
+
             let newScale = currentZoomScale;
             if (distance >= scaleThresholds.sphere.min) {
                 newScale = 'sphere';
@@ -1129,17 +1129,17 @@
             } else {
                 newScale = 'detail';
             }
-            
+
             // If scale changed, update visibility
             if (newScale !== currentZoomScale) {
                 // Removed debug console.log for cleaner experience
                 currentZoomScale = newScale;
-                
+
                 // Update element visibility based on current scale
                 updateElementVisibility();
             }
         }
-        
+
         function updateElementVisibility() {
             // Sphere visibility - since it's now a Group, handle differently
             const shouldShowSphere = currentZoomScale === 'sphere';
@@ -1148,7 +1148,7 @@
                 if (sphere) {
                     // Sphere is now a Group, so animate visibility on children materials
                     const targetOpacity = shouldShowSphere ? 1.0 : 0.0;
-                    
+
                     sphere.children.forEach(line => {
                         if (line.material) {
                             gsap.to(line.material, {
@@ -1167,7 +1167,7 @@
                     });
                 }
             }
-            
+
             // Stadium text visibility - only show during first zoom sequence, then permanently hidden
             const shouldShowStadiumText = !hasSeenIntroSequence && currentZoomScale !== 'sphere';
             if (shouldShowStadiumText !== stadiumTextVisible) {
@@ -1188,12 +1188,12 @@
                     }
                 }
             }
-            
+
             // Stadium visibility - show when not at sphere scale
             const shouldShowStadium = currentZoomScale !== 'sphere';
             if (stadium && stadium.visible !== shouldShowStadium) {
                 stadium.visible = shouldShowStadium;
-                
+
                 // Also show/hide all stadium children
                 stadium.traverse((child) => {
                     if (child.isMesh) {
@@ -1201,7 +1201,7 @@
                         if (child.material) {
                             // Handle both single materials and arrays
                             const materials = Array.isArray(child.material) ? child.material : [child.material];
-                            
+
                             materials.forEach(mat => {
                                 if (shouldShowStadium) {
                                     // Fade in stadium
@@ -1219,7 +1219,7 @@
                     }
                 });
             }
-            
+
             // Reflective ground visibility - show when not at sphere scale
             const shouldShowGround = currentZoomScale !== 'sphere';
             if (groundReflector && groundReflector.visible !== shouldShowGround) {
@@ -1228,19 +1228,19 @@
             if (groundMist && groundMist.visible !== shouldShowGround) {
                 groundMist.visible = shouldShowGround;
             }
-            
+
             // Stadium detail visibility
             const shouldShowDetail = currentZoomScale === 'detail';
             if (shouldShowDetail !== stadiumDetailVisible) {
                 stadiumDetailVisible = shouldShowDetail;
-                
-                
+
+
                 // Show/hide world-space text (Jesse Zhou style) - visible at stadium and detail scale
                 if (worldSpaceText) {
                     const shouldShowWorldText = currentZoomScale === 'stadium' || currentZoomScale === 'detail';
                     worldSpaceText.style.opacity = shouldShowWorldText ? '1' : '0';
                 }
-                
+
                 // Floodlights visibility
                 if (floodlights) {
                     floodlights.forEach(light => {
@@ -1251,7 +1251,7 @@
                         });
                     });
                 }
-                
+
                 // Atmospheric particles
                 if (atmosphericParticles.length) {
                     atmosphericParticles.forEach(system => {
@@ -1267,10 +1267,10 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            
+
             // Update scale-based visibility
             updateScaleBasedVisibility();
-            
+
             // Update 2D text position next to stadium
             updateWorldSpaceTextPosition();
 
@@ -1279,9 +1279,9 @@
             // Animations
             if (isAnimationPlaying) {
                 const time = Date.now() * 0.001;
-                
+
                 // Sphere is now static - no automatic rotation
-                
+
                 // Dynamic floodlight intensity for dramatic effect (only in detail mode)
                 if (floodlights && currentZoomScale === 'detail') {
                     floodlights.forEach((light, index) => {
@@ -1290,8 +1290,8 @@
                         light.intensity = baseIntensity + Math.sin(time * 0.5 + index) * 1.5 + Math.random() * 0.2;
                     });
                 }
-                
-                
+
+
                 // Make text always face camera when visible
                 if (textMesh && currentZoomScale === 'stadium') {
                     textMesh.lookAt(camera.position);
@@ -1314,11 +1314,11 @@
         }
 
         // Disable intro animation for debugging
-        // gsap.fromTo(camera.position, 
+        // gsap.fromTo(camera.position,
         //     { x: 200, y: 200, z: 200 },
         //     { x: 0, y: 100, z: 150, duration: 4, ease: "power2.out", delay: 1 }
         // );
-        
+
         console.log('Script loaded, animation loop started');
     </script>
 </body>
