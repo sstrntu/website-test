@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  frontend:
+    container_name: tm-web-dev
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    networks:
+      - shared_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tm-webdev.rule=Host(`web-dev.turfmapp.com`)"
+      - "traefik.http.routers.tm-webdev.entrypoints=web-secure"
+      - "traefik.http.routers.tm-webdev.tls.certresolver=cloudflare"
+      - "traefik.http.services.tm-webdev.loadbalancer.server.port=80"
+      - "traefik.docker.network=shared_network"
+
+networks:
+  shared_network:
+    external: true
