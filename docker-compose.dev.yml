@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tm-webdev.rule=Host(`localhost`)"
+      - "traefik.http.routers.tm-webdev.entrypoints=web"
+      - "traefik.http.services.tm-webdev.loadbalancer.server.port=80"
+
+
+  traefik:
+    image: traefik:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml
+    ports:
+      - '0.0.0.0:80:80'

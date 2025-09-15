@@ -1,0 +1,22 @@
+log:
+  level: INFO
+
+entryPoints:
+  web:
+    address: ":80"
+
+api:
+  dashboard: true
+
+hostProxyHeaders:
+  - "X-Forwarded-Host"
+
+providers:
+  # https://docs.traefik.io/master/providers/file/
+  file:
+    filename: /etc/traefik/traefik.yml
+    watch: true
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    watch: true

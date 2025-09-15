@@ -79,8 +79,8 @@
         let sphere, sphereRadius = 1500; // Much bigger sphere to be clearly visible at distance
         let currentZoomScale = 'sphere'; // 'sphere', 'stadium', 'detail'
         let scaleThresholds = {
-            sphere: { min: 2500, max: Infinity },
-            stadium: { min: 200, max: 2500 },  // Adjusted for better text visibility
+            sphere: { min: 1000, max: Infinity },
+            stadium: { min: 200, max: 1000 },  // Adjusted for better text visibility
             detail: { min: 1, max: 200 }       // Text only shows when very close
         };
         let sphereVisible = true;
@@ -148,9 +148,7 @@
             createStadium();
 
             // Add reflective ground plane (will be hidden at sphere scale)
-            if (!isLowEnd) {
-                createReflectiveGround();
-            }
+            createReflectiveGround();
 
 
             // Setup camera transitions
@@ -1229,17 +1227,17 @@
                 groundMist.visible = shouldShowGround;
             }
 
+            // Show/hide world-space text (Jesse Zhou style) - visible at stadium and detail scale
+            if (worldSpaceText) {
+                const shouldShowWorldText = currentZoomScale === 'stadium' || currentZoomScale === 'detail';
+                worldSpaceText.style.opacity = shouldShowWorldText ? '1' : '0';
+            }
+
             // Stadium detail visibility
             const shouldShowDetail = currentZoomScale === 'detail';
             if (shouldShowDetail !== stadiumDetailVisible) {
                 stadiumDetailVisible = shouldShowDetail;
 
-
-                // Show/hide world-space text (Jesse Zhou style) - visible at stadium and detail scale
-                if (worldSpaceText) {
-                    const shouldShowWorldText = currentZoomScale === 'stadium' || currentZoomScale === 'detail';
-                    worldSpaceText.style.opacity = shouldShowWorldText ? '1' : '0';
-                }
 
                 // Floodlights visibility
                 if (floodlights) {
